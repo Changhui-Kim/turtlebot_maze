@@ -67,12 +67,16 @@ class MazeSolver:
 
     def count_free_ratio(self, center_idx, win_deg):
         win = int(round(math.radians(win_deg/2) / self.angle_inc))
-        n, free, total = len(self.ranges), 0, 0
+        n, free, total, inf_count = len(self.ranges), 0, 0, 0
         for di in range(-win, win+1):
             d = self.ranges[(center_idx + di) % n]
-            if not math.isinf(d) and d > self.min_dist:
+            if math.isinf(d):
+                inf_count += 1
+                continue
+            if d > self.min_dist:
                 free += 1
             total += 1
+        rospy.loginfo("inf value ratio : %.2f", inf_count / total if total > 0 else 0.0)
         return (free/total) if total>0 else 0.0
     
     def distance(self, center_idx, win_deg, metric):
@@ -109,8 +113,8 @@ class MazeSolver:
             min_dist = math.inf
             for di in range(-win, win+1):
                 d = self.ranges[(center_idx+di) % n]
-                if not math.isinf(d) and max_dist > d and d>0.0:
-                    max_dist = d
+                if not math.isinf(d) and min_dist > d and d>0.0:
+                    min_dist = d
             return min_dist
     
     def align_to_wall(self):
@@ -119,8 +123,8 @@ class MazeSolver:
         idx_l = (self.idx_front + int(round(math.pi/2 / self.angle_inc))) % len(self.ranges)
         
         # 정렬용이기 때문에 window size를 작게
-        left_dist  = self.distance(idx_l, 5, 'max')
-        right_dist = self.distance(idx_r, 5, 'max')
+        left_dist  = self.distance(idx_l, 5, 'med')
+        right_dist = self.distance(idx_r, 5, 'med')
 
         if left_dist < right_dist:
             idx_center = idx_l
@@ -182,7 +186,6 @@ class MazeSolver:
 
         # 마무리 정지 & 최종 로그
         self.cmd_pub.publish(Twist())
-        self.need_align = False
         self.err_count = 0
         rospy.loginfo("<<< align_to_wall END: final err=%.3f after %d iters",
                       angle_err, iter_ct)
@@ -248,8 +251,8 @@ class MazeSolver:
             
             p_r = self.count_free_ratio(idx_r, self.win_side_deg)
             p_l = self.count_free_ratio(idx_l, self.win_side_deg)
-            left_dist  = self.distance(idx_l, self.win_side_deg, 'avg')
-            right_dist = self.distance(idx_r, self.win_side_deg, 'avg')
+            left_dist  = self.distance(idx_l, self.win_side_deg, 'med')
+            right_dist = self.distance(idx_r, self.win_side_deg, 'med')
 
             # a) 왼쪽이 비었으면 좌회전 : If left free -> turn left
             if p_l > self.side_free_req:
